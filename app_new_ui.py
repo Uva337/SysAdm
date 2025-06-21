@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (
     QInputDialog, QComboBox, QStackedWidget, QListWidget, QListWidgetItem,
     QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView,
     QFileDialog, QMenuBar, QAction, QMenu, QAbstractItemView, QTreeWidgetItemIterator,
-    QGroupBox, QScrollArea
+    QGroupBox, QScrollArea, QProgressBar
 )
 from PyQt5.QtCore import (
     Qt, QThread, QObject, pyqtSignal, QPropertyAnimation, QEasingCurve,
@@ -515,6 +515,34 @@ class MainWindow(QMainWindow):
         info_layout.addRow(InfoLabel("Имя хоста:"), ValueLabel(platform.node()))
         info_layout.addRow(InfoLabel("Операционная система:"), ValueLabel(f"{platform.system()} {platform.release()}"))
         main_layout.addWidget(info_group)
+
+        if PSUTIL_AVAILABLE:
+            self.metrics_group = QGroupBox("Мониторинг системы")
+            metrics_layout = QFormLayout(self.metrics_group)
+
+            self.cpu_bar = QProgressBar()
+            self.cpu_bar.setRange(0, 100)
+            self.cpu_bar.setFormat("%p%")
+
+            self.mem_bar = QProgressBar()
+            self.mem_bar.setRange(0, 100)
+            self.mem_bar.setFormat("%p%")
+
+            self.net_sent_label = ValueLabel("0 B/s")
+            self.net_recv_label = ValueLabel("0 B/s")
+
+            metrics_layout.addRow(InfoLabel("Загрузка CPU:"), self.cpu_bar)
+            metrics_layout.addRow(InfoLabel("Память:"), self.mem_bar)
+            metrics_layout.addRow(InfoLabel("Сеть отправка:"), self.net_sent_label)
+            metrics_layout.addRow(InfoLabel("Сеть прием:"), self.net_recv_label)
+
+            main_layout.addWidget(self.metrics_group)
+
+            self.last_net_io = psutil.net_io_counters()
+            self.metrics_timer = QTimer(self)
+            self.metrics_timer.timeout.connect(self.update_system_metrics)
+            self.update_system_metrics()
+            self.metrics_timer.start(3000)
 
         # Панель быстрого запуска
         self.quick_launch_group = QGroupBox("Панель быстрого запуска (Избранное)")
@@ -1034,6 +1062,27 @@ class MainWindow(QMainWindow):
                     self.output_table.setItem(i, j, QTableWidgetItem(cell))
         self.output_table.resizeColumnsToContents()
 
+    def format_speed(self, bytes_per_sec: float) -> str:
+        units = ["B/s", "KB/s", "MB/s", "GB/s"]
+        value = float(bytes_per_sec)
+        idx = 0
+        while value >= 1024 and idx < len(units) - 1:
+            value /= 1024
+            idx += 1
+        return f"{value:.1f} {units[idx]}"
+
+    def update_system_metrics(self):
+        if not PSUTIL_AVAILABLE:
+            return
+        self.cpu_bar.setValue(int(psutil.cpu_percent()))
+        self.mem_bar.setValue(int(psutil.virtual_memory().percent))
+        new_io = psutil.net_io_counters()
+        sent_rate = new_io.bytes_sent - self.last_net_io.bytes_sent
+        recv_rate = new_io.bytes_recv - self.last_net_io.bytes_recv
+        self.last_net_io = new_io
+        self.net_sent_label.setText(self.format_speed(sent_rate))
+        self.net_recv_label.setText(self.format_speed(recv_rate))
+
     def toggle_recording(self, checked):
         if checked:
             self.macro_engine.start_recording()
@@ -1088,6 +1137,9 @@ class MainWindow(QMainWindow):
         if self.exec_thread and self.exec_thread.isRunning():
             self.exec_thread.quit()
             self.exec_thread.wait()
+
+        if hasattr(self, 'metrics_timer') and self.metrics_timer.isActive():
+            self.metrics_timer.stop()
 
         # if self.log_viewer_timer:
         #     self.log_viewer_timer.stop()
