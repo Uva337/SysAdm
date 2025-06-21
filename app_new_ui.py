@@ -418,7 +418,8 @@ class MainWindow(QMainWindow):
         self.nlu_parser = AdvancedNLUParser(self.command_templates)
         self.logger = AuditLogger()
         self.macro_engine = MacroEngine(self.run_execution_for_macro)
-        self.plugin_manager = PluginManager()
+        # Передаем ссылку на главное окно в менеджер плагинов
+        self.plugin_manager = PluginManager(app_context=self)
         self.favorites = self.load_favorites()
 
         self.current_intent = None
@@ -426,6 +427,8 @@ class MainWindow(QMainWindow):
         self.exec_thread, self.exec_worker = None, None
 
         self.init_ui()
+        # Загружаем плагины после инициализации интерфейса
+        self.plugin_manager.load_plugins()
 
     def init_ui(self):
         self.setWindowTitle(f"SysAdmin Assistant - [{self.username} - {self.user_role.value.upper()}]")
@@ -469,9 +472,10 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
-        tools_menu = menu_bar.addMenu("Инструменты")
+        # Меню инструментов доступно плагинам
+        self.tools_menu = menu_bar.addMenu("Инструменты")
         plugins_action = QAction(QIcon.fromTheme("system-software-install"), "Менеджер плагинов (WIP)", self)
-        tools_menu.addAction(plugins_action)
+        self.tools_menu.addAction(plugins_action)
 
         if self.user_role == Role.ADMIN:
             admin_menu = menu_bar.addMenu("Администрирование")
