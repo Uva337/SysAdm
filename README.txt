@@ -42,8 +42,11 @@
 
 3.  **Запустите приложение:**
     ```bash
-    python app_new_ui.py
+    python app_new_ui.py [--theme qdarkstyle] [--stylesheet path/to/style.css]
     ```
+    По умолчанию используется встроенная темная тема. Опция `--theme qdarkstyle`
+    включает оформление библиотеки QDarkStyle. Параметр `--stylesheet` позволяет
+    загрузить собственный CSS-файл.
 
 ### ❗️ Запуск в Windows с правами администратора
 

@@ -10,6 +10,7 @@ import json
 import platform
 import time
 import datetime
+import argparse
 from functools import partial
 from typing import List, Dict
 
@@ -146,7 +147,36 @@ STYLESHEET = """
     QGroupBox { font-size: 12pt; font-weight: bold; color: #ffffff; border: 1px solid #40444b; border-radius: 5px; margin-top: 10px;}
     QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 5px; }
     QScrollArea { border: none; }
+
+    /* Индикатор прогресса */
+    QProgressBar {
+        background-color: #202225;
+        border: 1px solid #40444b;
+        border-radius: 5px;
+        text-align: center;
+        color: #dcddde;
+    }
+    QProgressBar::chunk {
+        background-color: #5865f2;
+        width: 10px;
+        margin: 0.5px;
+    }
 """
+
+# --- Парсинг аргументов командной строки ---
+def parse_args():
+    parser = argparse.ArgumentParser(description="SysAdmin Assistant")
+    parser.add_argument(
+        "--theme",
+        choices=["default", "qdarkstyle"],
+        default="default",
+        help="Выбор темы оформления",
+    )
+    parser.add_argument(
+        "--stylesheet",
+        help="Путь к CSS файлу со стилем. Приоритетнее, чем --theme",
+    )
+    return parser.parse_known_args()
 
 # --- Иконки и переводы ---
 CATEGORY_TRANSLATIONS = {
@@ -1101,10 +1131,31 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    if hasattr(Qt, 'AA_EnableHighDpiScaling'): QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    if hasattr(Qt, 'AA_UseHighDpiPixmaps'): QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-    app = QApplication(sys.argv)
-    app.setStyleSheet(STYLESHEET)
+    args, qt_args = parse_args()
+    qt_args.insert(0, sys.argv[0])
+
+    if hasattr(Qt, 'AA_EnableHighDpiScaling'):
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
+    app = QApplication(qt_args)
+
+    stylesheet = STYLESHEET
+    if args.stylesheet:
+        try:
+            with open(args.stylesheet, "r", encoding="utf-8") as f:
+                stylesheet = f.read()
+        except Exception as e:
+            print(f"Could not load stylesheet {args.stylesheet}: {e}")
+    elif args.theme == "qdarkstyle":
+        try:
+            import qdarkstyle
+            stylesheet = qdarkstyle.load_stylesheet()
+        except Exception as e:
+            print(f"Failed to load QDarkStyle theme: {e}")
+
+    app.setStyleSheet(stylesheet)
 
     icon_path = icon.create_app_icon_if_not_exists()
     if icon_path and os.path.exists(icon_path):
