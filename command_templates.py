@@ -38,7 +38,7 @@ class IntentTemplate:
         description: Человекочитаемое описание интента.
         phrases: Список ключевых фраз для распознавания этого интента.
         params: Словарь спецификаций параметров, где ключ - имя параметра.
-        templates: Словарь с шаблонами команд для разных ОС ('win', 'astro').
+        templates: Словарь с шаблонами команд для разных ОС ('win', 'astra').
     """
     intent: str
     description: str = ""
@@ -118,7 +118,7 @@ class CommandTemplates:
 
         Args:
             intent: Идентификатор интента.
-            os_type: Тип операционной системы ('win' или 'astro').
+            os_type: Тип операционной системы ('win' или 'astra').
             params: Словарь с параметрами для подстановки.
 
         Returns:

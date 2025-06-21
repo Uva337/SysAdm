@@ -131,7 +131,7 @@ def execute_intent(intent: str, params: Dict[str, Any], command_templates: Comma
             return
 
         # Шаг 2: Если специального обработчика нет, используем стандартный путь через шаблоны
-        os_type = "win" if platform.system().lower() == "windows" else "astro"
+        os_type = "win" if platform.system().lower() == "windows" else "astra"
         final_command = command_templates.render_command(intent, os_type, params)
         on_output(f"$ {final_command}\n")
 
