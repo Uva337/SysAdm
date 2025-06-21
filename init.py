@@ -6,13 +6,13 @@
 из `sysadmin_core`, упрощая их использование в других частях приложения.
 """
 
-from .router import IntentRouter
-from .command_templates import CommandTemplates, IntentTemplate, ParamSpec
-from .plugin_api import PluginBase, PluginManager
-from .macro_engine import MacroEngine
-from .auth_rbac import AuthManager, Role
-from .logging_audit import AuditLogger
-from .utils import AdvancedNLUParser
+from router import IntentRouter
+from command_templates import CommandTemplates, IntentTemplate, ParamSpec
+from plugin_api import PluginBase, PluginManager
+from macro_engine import MacroEngine
+from auth_rbac import AuthManager, Role
+from logging_audit import AuditLogger
+from utils import AdvancedNLUParser
 
 __all__ = [
     'IntentRouter',
