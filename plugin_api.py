@@ -4,7 +4,8 @@
 """
 import importlib
 import os
-from typing import List, Type
+import inspect
+from typing import List
 
 class PluginBase:
     """
@@ -63,7 +64,7 @@ class PluginManager:
                     module = importlib.import_module(module_name)
                     for item_name in dir(module):
                         item = getattr(module, item_name)
-                        if isinstance(item, Type) and issubclass(item, PluginBase) and item is not PluginBase:
+                        if inspect.isclass(item) and issubclass(item, PluginBase) and item is not PluginBase:
                             plugin_instance = item(self.app_context)
                             self.plugins.append(plugin_instance)
                             plugin_instance.activate()
