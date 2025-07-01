@@ -10,6 +10,7 @@
 import sqlite3
 import os
 import bcrypt
+import json
 from enum import Enum
 from typing import Optional, Tuple, List, Dict
 from cryptography.fernet import Fernet
@@ -98,7 +99,7 @@ class AuthManager:
 
         encrypted_data = None
         if extra_data:
-            data_str = str(extra_data)
+            data_str = json.dumps(extra_data, ensure_ascii=False)
             encrypted_data = self.fernet.encrypt(data_str.encode('utf-8'))
 
         try:
@@ -149,9 +150,9 @@ class AuthManager:
         if result and result[0]:
             try:
                 decrypted_data_bytes = self.fernet.decrypt(result[0])
-                data = eval(decrypted_data_bytes.decode('utf-8'))
+                data = json.loads(decrypted_data_bytes.decode('utf-8'))
                 return data
-            except Exception as e:
+            except (json.JSONDecodeError, Exception) as e:
                 print(f"Failed to decrypt or parse data for user '{username}': {e}")
         return None
 

@@ -418,7 +418,8 @@ class MainWindow(QMainWindow):
         self.nlu_parser = AdvancedNLUParser(self.command_templates)
         self.logger = AuditLogger()
         self.macro_engine = MacroEngine(self.run_execution_for_macro)
-        self.plugin_manager = PluginManager()
+        self.plugin_manager = PluginManager(app_context=self)
+        self.plugin_manager.load_plugins()
         self.favorites = self.load_favorites()
 
         self.current_intent = None
