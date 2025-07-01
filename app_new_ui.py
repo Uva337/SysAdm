@@ -516,6 +516,28 @@ class MainWindow(QMainWindow):
         info_layout.addRow(InfoLabel("Операционная система:"), ValueLabel(f"{platform.system()} {platform.release()}"))
         main_layout.addWidget(info_group)
 
+        # Группа мониторинга системы
+        if PSUTIL_AVAILABLE:
+            self.monitor_group = QGroupBox("Мониторинг системы")
+            monitor_layout = QVBoxLayout(self.monitor_group)
+            stats_form = QFormLayout()
+            self.cpu_usage_label = ValueLabel("0%")
+            self.mem_usage_label = ValueLabel("0%")
+            stats_form.addRow(InfoLabel("CPU:"), self.cpu_usage_label)
+            stats_form.addRow(InfoLabel("Память:"), self.mem_usage_label)
+            self.process_table = QTableWidget()
+            self.process_table.setColumnCount(3)
+            self.process_table.setHorizontalHeaderLabels(["PID", "Имя", "CPU %"])
+            self.process_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.process_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            self.process_table.setSelectionMode(QAbstractItemView.NoSelection)
+            monitor_layout.addLayout(stats_form)
+            monitor_layout.addWidget(self.process_table)
+            main_layout.addWidget(self.monitor_group)
+            self.stats_timer = QTimer(self)
+            self.stats_timer.setInterval(3000)
+            self.stats_timer.timeout.connect(self.update_system_stats)
+
         # Панель быстрого запуска
         self.quick_launch_group = QGroupBox("Панель быстрого запуска (Избранное)")
         self.quick_launch_layout = QGridLayout(self.quick_launch_group)
@@ -1034,6 +1056,26 @@ class MainWindow(QMainWindow):
                     self.output_table.setItem(i, j, QTableWidgetItem(cell))
         self.output_table.resizeColumnsToContents()
 
+    def update_system_stats(self):
+        if not PSUTIL_AVAILABLE:
+            return
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory().percent
+        self.cpu_usage_label.setText(f"{cpu:.1f}%")
+        self.mem_usage_label.setText(f"{mem:.1f}%")
+
+        top_procs = sorted(psutil.process_iter(['pid', 'name', 'cpu_percent']),
+                           key=lambda p: p.info['cpu_percent'], reverse=True)[:5]
+        self.process_table.setRowCount(len(top_procs))
+        for i, proc in enumerate(top_procs):
+            pid = str(proc.info['pid'])
+            name = proc.info['name'] or ''
+            cpu_p = f"{proc.info['cpu_percent']:.1f}"
+            self.process_table.setItem(i, 0, QTableWidgetItem(pid))
+            self.process_table.setItem(i, 1, QTableWidgetItem(name))
+            self.process_table.setItem(i, 2, QTableWidgetItem(cpu_p))
+        self.process_table.resizeRowsToContents()
+
     def toggle_recording(self, checked):
         if checked:
             self.macro_engine.start_recording()
@@ -1076,6 +1118,12 @@ class MainWindow(QMainWindow):
                 return []
         return []
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if PSUTIL_AVAILABLE and hasattr(self, 'stats_timer'):
+            self.stats_timer.start()
+            self.update_system_stats()
+
     def save_favorites(self):
         try:
             with open(FAVORITES_FILE, 'w', encoding='utf-8') as f:
@@ -1088,6 +1136,9 @@ class MainWindow(QMainWindow):
         if self.exec_thread and self.exec_thread.isRunning():
             self.exec_thread.quit()
             self.exec_thread.wait()
+
+        if PSUTIL_AVAILABLE and hasattr(self, 'stats_timer') and self.stats_timer.isActive():
+            self.stats_timer.stop()
 
         # if self.log_viewer_timer:
         #     self.log_viewer_timer.stop()
