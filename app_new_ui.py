@@ -45,6 +45,7 @@ from utils import AdvancedNLUParser
 from sysadmin_actions import execute_intent, SPECIAL_HANDLERS
 from macro_engine import MacroEngine
 from plugin_api import PluginManager
+from plugins.chat_plugin import send_chat_completion
 import icon
 from spinner import SpinnerWidget
 
@@ -424,6 +425,7 @@ class MainWindow(QMainWindow):
         self.current_intent = None
         self.param_widgets = {}
         self.exec_thread, self.exec_worker = None, None
+        self.chat_messages = []
 
         self.init_ui()
 
@@ -450,14 +452,17 @@ class MainWindow(QMainWindow):
         self.dashboard_page = self.create_dashboard_page()
         self.commands_page = self.create_commands_page()
         self.macros_page = self.create_macros_page()
+        self.chat_page = self.create_chat_page()
 
         self.main_stack.addWidget(self.dashboard_page)
         self.main_stack.addWidget(self.commands_page)
         self.main_stack.addWidget(self.macros_page)
+        self.main_stack.addWidget(self.chat_page)
 
         self.add_nav_item("Быстрый запуск", 'dashboard', nav_list)
         self.add_nav_item("Команды", 'commands', nav_list)
         self.add_nav_item("Макросы", 'macros', nav_list)
+        self.add_nav_item("Чат", 'applications-internet', nav_list)
 
         nav_list.currentRowChanged.connect(self.main_stack.setCurrentIndex)
         nav_list.setCurrentRow(0)
@@ -666,6 +671,28 @@ class MainWindow(QMainWindow):
         save_btn.clicked.connect(self.save_macro)
         load_btn.clicked.connect(self.load_macro)
         play_btn.clicked.connect(lambda: self.macro_engine.play_macro(self.macro_engine.recorded_macro))
+        return page
+
+    def create_chat_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        self.chat_history = QTextEdit()
+        self.chat_history.setReadOnly(True)
+
+        input_layout = QHBoxLayout()
+        self.chat_input = QLineEdit()
+        self.chat_input.setPlaceholderText("Введите сообщение...")
+        send_btn = QPushButton("Отправить")
+        input_layout.addWidget(self.chat_input)
+        input_layout.addWidget(send_btn)
+
+        layout.addWidget(self.chat_history)
+        layout.addLayout(input_layout)
+
+        send_btn.clicked.connect(self.send_chat_message)
+        self.chat_input.returnPressed.connect(self.send_chat_message)
+
         return page
 
     def populate_function_tree(self):
@@ -1066,6 +1093,25 @@ class MainWindow(QMainWindow):
                     self.macro_list_widget.addItem(f"{action['intent']}: {action['params']}")
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка загрузки", f"Не удалось загрузить макрос: {e}")
+
+    def send_chat_message(self):
+        text = self.chat_input.text().strip()
+        if not text:
+            return
+        self.chat_messages.append({"role": "user", "content": text})
+        self.update_chat_history(f"Вы: {text}")
+        self.chat_input.clear()
+        QApplication.processEvents()
+        try:
+            reply = send_chat_completion(self.chat_messages)
+            self.chat_messages.append({"role": "assistant", "content": reply})
+            self.update_chat_history(f"ИИ: {reply}")
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+
+    def update_chat_history(self, text: str):
+        self.chat_history.append(text)
+        self.chat_history.moveCursor(QTextCursor.End)
 
     def load_favorites(self):
         if os.path.exists(FAVORITES_FILE):
