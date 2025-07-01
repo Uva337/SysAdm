@@ -51,11 +51,14 @@ class PluginManager:
             os.makedirs(self.plugin_dir)
             print(f"Plugin directory '{self.plugin_dir}' created.")
 
-    def load_plugins(self):
+    def load_plugins(self) -> List[str]:
         """
         Сканирует директорию плагинов, импортирует их и активирует.
+
+        Returns:
+            Список сообщений о ходе загрузки.
         """
-        print(f"Loading plugins from '{self.plugin_dir}'...")
+        messages = [f"Loading plugins from '{self.plugin_dir}'..."]
         for filename in os.listdir(self.plugin_dir):
             if filename.endswith(".py") and not filename.startswith("__"):
                 module_name = f"{self.plugin_dir}.{filename[:-3]}"
@@ -67,25 +70,38 @@ class PluginManager:
                             plugin_instance = item(self.app_context)
                             self.plugins.append(plugin_instance)
                             plugin_instance.activate()
-                            print(f"Plugin '{item.__name__}' activated.")
+                            msg = f"Plugin '{item.__name__}' activated."
+                            messages.append(msg)
+                            print(msg)
                 except Exception as e:
-                    print(f"Failed to load or activate plugin from '{filename}': {e}")
-        print(f"Finished loading plugins. Total active: {len(self.plugins)}.")
+                    msg = f"Failed to load or activate plugin from '{filename}': {e}"
+                    messages.append(msg)
+                    print(msg)
+        summary = f"Finished loading plugins. Total active: {len(self.plugins)}."
+        messages.append(summary)
+        print(summary)
+        return messages
 
-    def reload_plugins(self):
+    def reload_plugins(self) -> List[str]:
         """
         Деактивирует все текущие плагины и загружает их заново.
+
+        Returns:
+            Список сообщений о ходе перезагрузки.
         """
-        print("Reloading all plugins...")
-        # Деактивация
+        messages = ["Reloading all plugins..."]
         for plugin in self.plugins:
             try:
                 plugin.deactivate()
-                print(f"Plugin '{plugin.__class__.__name__}' deactivated.")
+                msg = f"Plugin '{plugin.__class__.__name__}' deactivated."
+                messages.append(msg)
+                print(msg)
             except Exception as e:
-                print(f"Error deactivating plugin '{plugin.__class__.__name__}': {e}")
-        
+                msg = f"Error deactivating plugin '{plugin.__class__.__name__}': {e}"
+                messages.append(msg)
+                print(msg)
+
         self.plugins.clear()
-        
-        # Загрузка заново
-        self.load_plugins()
+
+        messages.extend(self.load_plugins())
+        return messages
