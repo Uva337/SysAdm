@@ -392,6 +392,74 @@ class UserManagementDialog(QDialog):
                 QMessageBox.critical(self, "Ошибка", f"Не удалось удалить пользователя '{username}'.")
 
 
+class PluginManagerDialog(QDialog):
+    def __init__(self, plugin_manager: PluginManager, parent=None):
+        super().__init__(parent)
+        self.plugin_manager = plugin_manager
+        self.setWindowTitle("Менеджер плагинов")
+        self.setMinimumSize(400, 300)
+
+        if not self.plugin_manager.plugins:
+            load_messages = self.plugin_manager.load_plugins()
+            if load_messages:
+                QMessageBox.information(self, "Загрузка плагинов", "\n".join(load_messages))
+
+        layout = QVBoxLayout(self)
+        self.list_widget = QListWidget()
+        layout.addWidget(self.list_widget)
+
+        btn_layout = QHBoxLayout()
+        self.reload_btn = QPushButton("Перезагрузить")
+        self.deactivate_btn = QPushButton("Деактивировать")
+        close_btn = QPushButton("Закрыть")
+
+        self.reload_btn.clicked.connect(self.reload_plugins)
+        self.deactivate_btn.clicked.connect(self.deactivate_selected)
+        close_btn.clicked.connect(self.accept)
+
+        btn_layout.addWidget(self.reload_btn)
+        btn_layout.addWidget(self.deactivate_btn)
+        btn_layout.addStretch()
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+
+        self.populate_list()
+
+    def populate_list(self):
+        self.list_widget.clear()
+        if not self.plugin_manager.plugins:
+            self.list_widget.addItem("(нет активных плагинов)")
+            self.list_widget.setEnabled(False)
+            self.deactivate_btn.setEnabled(False)
+        else:
+            self.list_widget.setEnabled(True)
+            self.deactivate_btn.setEnabled(True)
+            for plugin in self.plugin_manager.plugins:
+                self.list_widget.addItem(plugin.__class__.__name__)
+
+    def reload_plugins(self):
+        messages = self.plugin_manager.reload_plugins()
+        self.populate_list()
+        QMessageBox.information(self, "Результат", "\n".join(messages))
+
+    def deactivate_selected(self):
+        items = self.list_widget.selectedItems()
+        if not items:
+            QMessageBox.warning(self, "Ошибка", "Выберите плагин для деактивации.")
+            return
+        for item in items:
+            name = item.text()
+            for plugin in list(self.plugin_manager.plugins):
+                if plugin.__class__.__name__ == name:
+                    try:
+                        plugin.deactivate()
+                        self.plugin_manager.plugins.remove(plugin)
+                        QMessageBox.information(self, "Готово", f"Плагин '{name}' деактивирован.")
+                    except Exception as e:
+                        QMessageBox.critical(self, "Ошибка", f"Не удалось деактивировать '{name}': {e}")
+        self.populate_list()
+
+
 class InfoLabel(QLabel):
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
@@ -470,7 +538,8 @@ class MainWindow(QMainWindow):
         file_menu.addAction(exit_action)
 
         tools_menu = menu_bar.addMenu("Инструменты")
-        plugins_action = QAction(QIcon.fromTheme("system-software-install"), "Менеджер плагинов (WIP)", self)
+        plugins_action = QAction(QIcon.fromTheme("system-software-install"), "Менеджер плагинов", self)
+        plugins_action.triggered.connect(self.open_plugin_manager)
         tools_menu.addAction(plugins_action)
 
         if self.user_role == Role.ADMIN:
@@ -486,6 +555,10 @@ class MainWindow(QMainWindow):
 
     def open_user_management(self):
         dialog = UserManagementDialog(self.auth_manager, self.username, self)
+        dialog.exec_()
+
+    def open_plugin_manager(self):
+        dialog = PluginManagerDialog(self.plugin_manager, self)
         dialog.exec_()
 
     def show_about_dialog(self):
