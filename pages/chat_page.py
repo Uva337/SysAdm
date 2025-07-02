@@ -12,7 +12,20 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 
-from deepseek import DeepSeekChatPlugin
+try:
+    from deepseek import DeepSeekChatPlugin
+except ImportError:  # pragma: no cover - fallback for older package
+    from deepseek import DeepSeekAPI
+
+    class DeepSeekChatPlugin:
+        """Simple wrapper around :class:`DeepSeekAPI`."""
+
+        def __init__(self, api_key: str) -> None:
+            self._api = DeepSeekAPI(api_key=api_key)
+
+        def chat(self, message: str) -> str:
+            """Return a completion for ``message``."""
+            return self._api.chat_completion(prompt=message)
 
 import config
 
