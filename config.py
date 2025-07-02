@@ -29,3 +29,9 @@ class AppState:
 
 
 APP_STATE = AppState()
+
+
+def os_key() -> str:
+    """Return short OS key for commands.json templates."""
+    mapping = {"Windows": "win", "Linux": "astro", "macOS": "macos"}
+    return mapping.get(APP_STATE.current_os or "", "")

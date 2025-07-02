@@ -1,7 +1,7 @@
 """AI-powered chat page."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -10,9 +10,11 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QHBoxLayout,
     QMessageBox,
+    QInputDialog,
     QTreeWidget,
     QTreeWidgetItem,
     QSplitter,
+    QGroupBox,
 )
 
 try:  # pragma: no cover - package may be absent on CI
@@ -36,6 +38,25 @@ except Exception:  # Module missing or outdated
         def chat(self, message: str) -> str:
             """Return a completion for ``message``."""
             return self._api.chat_completion(prompt=message)
+
+class _CmdThread(QThread):
+    """Run a system command in the background."""
+
+    finished = pyqtSignal(str)
+
+    def __init__(self, cmd: list[str]) -> None:
+        super().__init__()
+        self.cmd = cmd
+
+    def run(self) -> None:  # pragma: no cover - system dependent
+        import subprocess
+
+        try:
+            out = subprocess.run(self.cmd, capture_output=True, text=True, check=False)
+            msg = out.stdout or out.stderr
+        except Exception as exc:  # pragma: no cover - system dependent
+            msg = str(exc)
+        self.finished.emit(msg)
 
 import config
 import json
@@ -62,18 +83,36 @@ class ChatPage(QWidget):
         splitter.addWidget(right_widget)
         splitter.setSizes([200, 600])
 
+        # Command runner
+        cmd_layout = QHBoxLayout()
+        self.cmd_input = QLineEdit()
+        self.cmd_run = QPushButton("Run")
+        cmd_layout.addWidget(self.cmd_input)
+        cmd_layout.addWidget(self.cmd_run)
+        right.addLayout(cmd_layout)
+
+        self.output = QTextEdit()
+        self.output.setReadOnly(True)
+        right.addWidget(self.output)
+
+        # Assistant chat
+        chat_box = QGroupBox("Assistant")
+        chat_layout = QVBoxLayout(chat_box)
         self.history = QTextEdit()
         self.history.setReadOnly(True)
-        right.addWidget(self.history)
-
-        input_layout = QHBoxLayout()
+        chat_layout.addWidget(self.history)
+        chat_in_layout = QHBoxLayout()
         self.input = QLineEdit()
         self.input.setPlaceholderText("Type your message...")
         self.send_btn = QPushButton("Send")
-        input_layout.addWidget(self.input)
-        input_layout.addWidget(self.send_btn)
-        right.addLayout(input_layout)
+        chat_in_layout.addWidget(self.input)
+        chat_in_layout.addWidget(self.send_btn)
+        chat_layout.addLayout(chat_in_layout)
+        right.addWidget(chat_box)
 
+        self._threads: list[QThread] = []
+
+        self.cmd_run.clicked.connect(self._run_cmd)
         self.send_btn.clicked.connect(self._send)
         self.input.returnPressed.connect(self._send)
         self.tree.itemClicked.connect(self._on_item)
@@ -111,9 +150,24 @@ class ChatPage(QWidget):
             self.history.verticalScrollBar().maximum()
         )
 
+    def _run_cmd(self) -> None:
+        """Execute command from the input field."""
+        cmd = self.cmd_input.text().strip()
+        if not cmd:
+            return
+        self.cmd_input.clear()
+        thread = _CmdThread(cmd.split())
+        thread.finished.connect(self._show_output)
+        thread.finished.connect(lambda: self._threads.remove(thread))
+        self._threads.append(thread)
+        thread.start()
+
+    def _show_output(self, text: str) -> None:
+        self.output.append(text)
+
     # ------------------------------------------------------------------
     def _populate_tree(self) -> None:
-        """Load command descriptions into the tree."""
+        """Load command descriptions into the tree for the selected OS."""
         path = Path("commands.json")
         if not path.exists():
             return
@@ -121,10 +175,15 @@ class ChatPage(QWidget):
             data = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return
+        os_key = config.os_key()
+        self.commands = {}
         categories: dict[str, list[tuple[str, str]]] = {}
         for key, meta in data.items():
+            if os_key and os_key not in meta.get("templates", {}):
+                continue
             cat = key.split(".")[0].capitalize()
             desc = meta.get("description", key)
+            self.commands[key] = meta
             categories.setdefault(cat, []).append((key, desc))
         for cat, items in sorted(categories.items()):
             cat_item = QTreeWidgetItem([cat])
@@ -136,7 +195,25 @@ class ChatPage(QWidget):
         self.tree.expandAll()
 
     def _on_item(self, item: QTreeWidgetItem) -> None:
-        """Insert clicked command description into the input field."""
-        if item.childCount() == 0:
-            self.input.setText(item.text(0))
+        """Fill the command input with the selected template."""
+        if item.childCount() != 0:
+            return
+        key = item.data(0, Qt.ItemDataRole.UserRole)
+        if not key or key not in self.commands:
+            return
+        meta = self.commands[key]
+        tmpl = meta.get("templates", {}).get(config.os_key())
+        if not tmpl:
+            QMessageBox.information(self, "Info", "Not supported on this OS")
+            return
+        params = {}
+        for name, pmeta in meta.get("params", {}).items():
+            if not pmeta.get("required"):
+                continue
+            value, ok = QInputDialog.getText(self, "Param", name)
+            if not ok or not value:
+                return
+            params[name] = value
+        self.cmd_input.setText(tmpl.format(**params))
+
 
