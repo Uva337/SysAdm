@@ -30,6 +30,11 @@ from PyQt5.QtGui import (
     QFont, QIcon, QColor, QTextCursor, QTextCharFormat, QRegularExpressionValidator
 )
 
+from dialogs.os_select import OSSelectDialog
+from pages.chat_page import ChatPage
+from pages.app_manager import AppManagerPage
+import config
+
 # --- Импорт компонентов ---
 try:
     import psutil
@@ -162,6 +167,7 @@ INTENT_ICONS = {
     'system.info': 'dialog-information', 'process.list': 'view-process-tree',
     'disk.usage': 'drive-harddisk', 'power.reboot': 'system-reboot',
     'power.shutdown': 'system-shutdown',
+    'chat': 'mail-send', 'apps': 'applications-other'
 }
 
 
@@ -450,14 +456,20 @@ class MainWindow(QMainWindow):
         self.dashboard_page = self.create_dashboard_page()
         self.commands_page = self.create_commands_page()
         self.macros_page = self.create_macros_page()
+        self.chat_page = ChatPage()
+        self.apps_page = AppManagerPage()
 
         self.main_stack.addWidget(self.dashboard_page)
         self.main_stack.addWidget(self.commands_page)
         self.main_stack.addWidget(self.macros_page)
+        self.main_stack.addWidget(self.chat_page)
+        self.main_stack.addWidget(self.apps_page)
 
         self.add_nav_item("Быстрый запуск", 'dashboard', nav_list)
         self.add_nav_item("Команды", 'commands', nav_list)
         self.add_nav_item("Макросы", 'macros', nav_list)
+        self.add_nav_item("AI Chat", 'chat', nav_list)
+        self.add_nav_item("Приложения", 'apps', nav_list)
 
         nav_list.currentRowChanged.connect(self.main_stack.setCurrentIndex)
         nav_list.setCurrentRow(0)
@@ -1160,7 +1172,11 @@ def main():
     if hasattr(Qt, 'AA_EnableHighDpiScaling'): QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     if hasattr(Qt, 'AA_UseHighDpiPixmaps'): QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     app = QApplication(sys.argv)
-    app.setStyleSheet(STYLESHEET)
+    try:
+        with open("resources/styles.qss", "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+    except Exception:
+        app.setStyleSheet(STYLESHEET)
 
     icon_path = icon.create_app_icon_if_not_exists()
     if icon_path and os.path.exists(icon_path):
@@ -1182,14 +1198,33 @@ def main():
         return
 
     login_dialog = LoginDialog(auth_manager)
-    if login_dialog.exec_() == QDialog.Accepted:
-        main_window = MainWindow(username=login_dialog.username, user_role=login_dialog.user_role,
-                                 auth_manager=auth_manager)
-        main_window.show()
-        sys.exit(app.exec_())
-    else:
+    if login_dialog.exec_() != QDialog.Accepted:
         auth_manager.close()
-        sys.exit(0)
+        return
+
+    os_dialog = OSSelectDialog()
+    if os_dialog.exec_() != QDialog.Accepted:
+        auth_manager.close()
+        return
+
+    config.APP_STATE.current_os = os_dialog.os_name
+
+    if not config.DEEPSEEK_API_KEY:
+        QMessageBox.critical(
+            None,
+            "Missing API key",
+            "\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u0435 DEEPSEEK_API_KEY \u0432 .env \u0438\u043b\u0438 \u043e\u043a\u0440\u0443\u0436\u0435\u043d\u0438\u0438",
+        )
+        auth_manager.close()
+        return
+
+    main_window = MainWindow(
+        username=login_dialog.username,
+        user_role=login_dialog.user_role,
+        auth_manager=auth_manager,
+    )
+    main_window.show()
+    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":

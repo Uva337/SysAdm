@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QTableWidget,

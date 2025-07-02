@@ -1,8 +1,8 @@
 """AI-powered chat page."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QTextEdit,
@@ -71,5 +71,7 @@ class ChatPage(QWidget):
             QMessageBox.warning(self, "Chat error", str(exc))
             return
         self.history.append(f"AI: {reply}")
-        self.history.verticalScrollBar().setValue(self.history.verticalScrollBar().maximum())
+        self.history.verticalScrollBar().setValue(
+            self.history.verticalScrollBar().maximum()
+        )
 
