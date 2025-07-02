@@ -10,6 +10,9 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QHBoxLayout,
     QMessageBox,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QSplitter,
 )
 
 try:  # pragma: no cover - package may be absent on CI
@@ -35,6 +38,8 @@ except Exception:  # Module missing or outdated
             return self._api.chat_completion(prompt=message)
 
 import config
+import json
+from pathlib import Path
 
 
 class ChatPage(QWidget):
@@ -43,21 +48,31 @@ class ChatPage(QWidget):
     def __init__(self) -> None:
         """Initialize widgets for chat history and input."""
         super().__init__()
-        layout = QVBoxLayout(self)
+        layout = QHBoxLayout(self)
+
+        self.tree = QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        layout.addWidget(self.tree, 1)
+
+        right = QVBoxLayout()
+        layout.addLayout(right, 3)
 
         self.history = QTextEdit()
         self.history.setReadOnly(True)
-        layout.addWidget(self.history)
+        right.addWidget(self.history)
 
         input_layout = QHBoxLayout()
         self.input = QLineEdit()
         self.send_btn = QPushButton("Send")
         input_layout.addWidget(self.input)
         input_layout.addWidget(self.send_btn)
-        layout.addLayout(input_layout)
+        right.addLayout(input_layout)
 
         self.send_btn.clicked.connect(self._send)
         self.input.returnPressed.connect(self._send)
+        self.tree.itemClicked.connect(self._on_item)
+
+        self._populate_tree()
 
     def _send(self) -> None:
         """Handle sending a message to DeepSeek and display the reply."""
@@ -83,4 +98,33 @@ class ChatPage(QWidget):
         self.history.verticalScrollBar().setValue(
             self.history.verticalScrollBar().maximum()
         )
+
+    # ------------------------------------------------------------------
+    def _populate_tree(self) -> None:
+        """Load command descriptions into the tree."""
+        path = Path("commands.json")
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        categories: dict[str, list[tuple[str, str]]] = {}
+        for key, meta in data.items():
+            cat = key.split(".")[0].capitalize()
+            desc = meta.get("description", key)
+            categories.setdefault(cat, []).append((key, desc))
+        for cat, items in sorted(categories.items()):
+            cat_item = QTreeWidgetItem([cat])
+            self.tree.addTopLevelItem(cat_item)
+            for key, desc in sorted(items, key=lambda p: p[1]):
+                child = QTreeWidgetItem([desc])
+                child.setData(0, Qt.ItemDataRole.UserRole, key)
+                cat_item.addChild(child)
+        self.tree.expandAll()
+
+    def _on_item(self, item: QTreeWidgetItem) -> None:
+        """Insert clicked command description into the input field."""
+        if item.childCount() == 0:
+            self.input.setText(item.text(0))
 
