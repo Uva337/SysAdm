@@ -12,15 +12,22 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 
-try:
+try:  # pragma: no cover - package may be absent on CI
     from deepseek import DeepSeekChatPlugin
-except ImportError:  # pragma: no cover - fallback for older package
-    from deepseek import DeepSeekAPI
+except Exception:  # Module missing or outdated
+    try:  # legacy API
+        from deepseek import DeepSeekAPI  # type: ignore
+    except Exception:  # completely missing
+        DeepSeekAPI = None  # type: ignore
 
-    class DeepSeekChatPlugin:
-        """Simple wrapper around :class:`DeepSeekAPI`."""
+    class DeepSeekChatPlugin:  # pragma: no cover - minimal fallback
+        """Fallback wrapper around :class:`DeepSeekAPI`."""
 
         def __init__(self, api_key: str) -> None:
+            if DeepSeekAPI is None:
+                raise RuntimeError(
+                    "DeepSeek package is not installed"
+                )
             self._api = DeepSeekAPI(api_key=api_key)
 
         def chat(self, message: str) -> str:
