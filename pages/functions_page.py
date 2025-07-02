@@ -96,6 +96,7 @@ class FunctionsPage(QWidget):
         self._threads: list[QThread] = []
         self.quick.itemClicked.connect(self._on_quick)
         self.tree.itemClicked.connect(self._on_tree)
+        self.tree.itemDoubleClicked.connect(self._on_tree_activate)
         self.run_btn.clicked.connect(self._on_run)
         self.input.returnPressed.connect(self._on_run)
 
@@ -142,6 +143,14 @@ class FunctionsPage(QWidget):
             return
         QMessageBox.information(self, "Info", meta.get("description", key))
 
+    def _on_tree_activate(self, item: QTreeWidgetItem) -> None:
+        """Execute command when tree item is activated."""
+        if item.childCount() != 0:
+            return
+        key = item.data(0, Qt.ItemDataRole.UserRole)
+        if key:
+            self._execute_key(key)
+
     def _on_quick(self, item: QListWidgetItem) -> None:
         """Handle quick command shortcuts."""
         text = item.text()
@@ -180,6 +189,10 @@ class FunctionsPage(QWidget):
             QMessageBox.warning(self, "Not found", "Cannot map input to command")
             return
         key = self.phrases[match[0]]
+        self._execute_key(key)
+
+    def _execute_key(self, key: str) -> None:
+        """Resolve and run the command mapped to ``key``."""
         meta = self.commands.get(key)
         if not meta:
             return
