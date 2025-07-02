@@ -15,9 +15,9 @@ from PyQt6.QtWidgets import (
     QDialog,
     QSplitter,
     QMenuBar,
-    QAction,
     QGraphicsOpacityEffect,
 )
+from PyQt6.QtGui import QAction
 
 import config
 from config import APP_STATE
