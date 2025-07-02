@@ -513,8 +513,33 @@ class MainWindow(QMainWindow):
         info_group = QGroupBox("Информация о системе")
         info_layout = QFormLayout(info_group)
         info_layout.addRow(InfoLabel("Имя хоста:"), ValueLabel(platform.node()))
-        info_layout.addRow(InfoLabel("Операционная система:"), ValueLabel(f"{platform.system()} {platform.release()}"))
+        info_layout.addRow(InfoLabel("Операционная система:"),
+                           ValueLabel(f"{platform.system()} {platform.release()}"))
         main_layout.addWidget(info_group)
+
+        if PSUTIL_AVAILABLE:
+            stats_group = QGroupBox("Статистика")
+            stats_layout = QGridLayout(stats_group)
+            self.cpu_usage_label = ValueLabel()
+            self.cpu_freq_label = ValueLabel()
+            self.ram_label = ValueLabel()
+            stats_layout.addWidget(InfoLabel("CPU %:"), 0, 0)
+            stats_layout.addWidget(self.cpu_usage_label, 0, 1)
+            stats_layout.addWidget(InfoLabel("Частота:"), 1, 0)
+            stats_layout.addWidget(self.cpu_freq_label, 1, 1)
+            stats_layout.addWidget(InfoLabel("RAM:"), 2, 0)
+            stats_layout.addWidget(self.ram_label, 2, 1)
+
+            self.proc_table = QTableWidget()
+            self.proc_table.setColumnCount(3)
+            self.proc_table.setHorizontalHeaderLabels(["PID", "Имя", "RAM MB"])
+            self.proc_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            stats_layout.addWidget(self.proc_table, 3, 0, 1, 2)
+
+            main_layout.addWidget(stats_group)
+
+            self.dashboard_timer = QTimer(self)
+            self.dashboard_timer.timeout.connect(self.update_dashboard_stats)
 
         # Панель быстрого запуска
         self.quick_launch_group = QGroupBox("Панель быстрого запуска (Избранное)")
@@ -527,6 +552,30 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(scroll_area, 1)  # Растягиваем
         return page
+
+    def update_dashboard_stats(self):
+        if not PSUTIL_AVAILABLE:
+            return
+        self.cpu_usage_label.setText(f"{psutil.cpu_percent()}%")
+        freqs = psutil.cpu_freq(percpu=True)
+        if freqs:
+            self.cpu_freq_label.setText(", ".join(f"{f.current:.0f}MHz" for f in freqs))
+        mem = psutil.virtual_memory()
+        self.ram_label.setText(f"{mem.used // (1024 ** 2)} / {mem.total // (1024 ** 2)} MB")
+        proc_list = []
+        for p in psutil.process_iter(["pid", "name", "memory_info"]):
+            try:
+                rss = p.info["memory_info"].rss if p.info["memory_info"] else 0
+                proc_list.append((rss, p.info["pid"], p.info["name"]))
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        proc_list.sort(reverse=True)
+        top = proc_list[:5]
+        self.proc_table.setRowCount(len(top))
+        for row, (rss, pid, name) in enumerate(top):
+            self.proc_table.setItem(row, 0, QTableWidgetItem(str(pid)))
+            self.proc_table.setItem(row, 1, QTableWidgetItem(name))
+            self.proc_table.setItem(row, 2, QTableWidgetItem(str(rss // (1024 ** 2))))
 
     def populate_quick_launch(self):
         # Очищаем старые виджеты
@@ -1083,6 +1132,11 @@ class MainWindow(QMainWindow):
         except IOError as e:
             print(f"Could not save favorites: {e}")
 
+    def showEvent(self, event):
+        if hasattr(self, 'dashboard_timer') and not self.dashboard_timer.isActive():
+            self.dashboard_timer.start(2000)
+        super().showEvent(event)
+
     def closeEvent(self, event):
         self.save_favorites()
         if self.exec_thread and self.exec_thread.isRunning():
@@ -1095,6 +1149,8 @@ class MainWindow(QMainWindow):
         #     self.log_viewer_thread.quit()
         #     self.log_viewer_thread.wait()
 
+        if hasattr(self, 'dashboard_timer') and self.dashboard_timer.isActive():
+            self.dashboard_timer.stop()
         self.logger.close()
         self.auth_manager.close()
         super().closeEvent(event)
