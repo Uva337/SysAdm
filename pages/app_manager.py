@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QThread, pyqtSignal, Qt
+from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QTableWidget,
@@ -21,15 +21,19 @@ import config
 
 
 class _WorkerThread(QThread):
+    """Thread that runs package operations sequentially."""
+
     progress = pyqtSignal(int)
 
     def __init__(self, func, packages: List[str], os_name: str) -> None:
+        """Store parameters for the worker."""
         super().__init__()
         self.func = func
         self.packages = packages
         self.os_name = os_name
 
     def run(self) -> None:  # pragma: no cover - GUI thread
+        """Execute the operation for all selected packages."""
         for i, pkg in enumerate(self.packages, 1):
             try:
                 self.func(pkg, self.os_name)
@@ -42,6 +46,7 @@ class AppManagerPage(QWidget):
     """Displays installed packages and manages recommended tools."""
 
     def __init__(self) -> None:
+        """Set up widgets for viewing and managing packages."""
         super().__init__()
         layout = QVBoxLayout(self)
 
@@ -73,6 +78,7 @@ class AppManagerPage(QWidget):
 
     # ------------------------------------------------------------------
     def _refresh(self) -> None:
+        """Populate the table with currently installed packages."""
         packages = os_tools.get_installed_packages(config.APP_STATE.current_os or "")
         self.table.setRowCount(len(packages))
         for row, pkg in enumerate(packages):
@@ -82,6 +88,7 @@ class AppManagerPage(QWidget):
         self.table.resizeColumnsToContents()
 
     def _run_task(self, func) -> None:
+        """Run install/uninstall operations in a background thread."""
         selected = [name for name, cb in self.tools.items() if cb.isChecked()]
         if not selected:
             return

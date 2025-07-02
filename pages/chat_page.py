@@ -1,8 +1,8 @@
 """AI-powered chat page."""
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QTextEdit,
@@ -34,6 +34,7 @@ class ChatPage(QWidget):
     """Page allowing user to chat with DeepSeek AI."""
 
     def __init__(self) -> None:
+        """Initialize widgets for chat history and input."""
         super().__init__()
         layout = QVBoxLayout(self)
 
@@ -52,6 +53,7 @@ class ChatPage(QWidget):
         self.input.returnPressed.connect(self._send)
 
     def _send(self) -> None:
+        """Handle sending a message to DeepSeek and display the reply."""
         text = self.input.text().strip()
         if not text:
             return

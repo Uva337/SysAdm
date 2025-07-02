@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
     """Application main window with page navigation."""
 
     def __init__(self) -> None:
+        """Initialize navigation and pages."""
         super().__init__()
         self.setWindowTitle("SysAdmin Assistant")
         self.resize(900, 600)
@@ -127,11 +128,13 @@ class MainWindow(QMainWindow):
             self._run_cmd(cmd)
 
     def _run_cmd(self, cmd: list[str]) -> None:
+        """Run a system command in a background thread."""
         thread = _CmdThread(cmd)
         thread.finished.connect(self._show_output)
         thread.start()
 
     def _show_output(self, text: str) -> None:
+        """Show command output in a message box."""
         dlg = QMessageBox(self)
         dlg.setWindowTitle("Output")
         dlg.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -139,6 +142,7 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _toast(self, text: str) -> None:
+        """Display a short informational message."""
         QMessageBox.information(self, "Info", text)
 
 
