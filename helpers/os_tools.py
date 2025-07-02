@@ -1,20 +1,18 @@
-# app_manager.py
-"""Utilities for managing system applications."""
-
+"""Cross-platform system package management helpers."""
 from __future__ import annotations
 
 import platform
 import subprocess
-from typing import List, Dict
+from typing import Dict, List
 
 try:
     import winreg
-except ImportError:  # pragma: no cover - non windows
-    winreg = None
+except Exception:  # pragma: no cover - non Windows
+    winreg = None  # type: ignore
 
 
 def get_installed_packages(os_name: str) -> List[Dict[str, str]]:
-    """Return installed packages list for the given OS."""
+    """Return list of installed packages for the chosen OS."""
     packages: List[Dict[str, str]] = []
     os_lower = os_name.lower()
     try:
@@ -31,7 +29,7 @@ def get_installed_packages(os_name: str) -> List[Dict[str, str]]:
                     "version": _safe_reg_value(subkey, "DisplayVersion"),
                     "date": _safe_reg_value(subkey, "InstallDate"),
                 })
-        elif os_lower in {"debian", "ubuntu"}:
+        elif os_lower in {"debian", "ubuntu", "linux"}:
             out = subprocess.run(["dpkg", "--list"], capture_output=True, text=True, check=False).stdout
             for line in out.splitlines()[5:]:
                 parts = line.split()
@@ -64,7 +62,7 @@ def install_app(name: str, os_name: str) -> None:
     os_lower = os_name.lower()
     if os_lower == "windows":
         subprocess.run(["winget", "install", "-e", "--id", name], check=False)
-    elif os_lower in {"debian", "ubuntu"}:
+    elif os_lower in {"debian", "ubuntu", "linux"}:
         subprocess.run(["sudo", "apt-get", "-y", "install", name], check=False)
     elif os_lower in {"rhel", "fedora"}:
         subprocess.run(["sudo", "yum", "-y", "install", name], check=False)
@@ -73,11 +71,11 @@ def install_app(name: str, os_name: str) -> None:
 
 
 def uninstall_app(name: str, os_name: str) -> None:
-    """Remove a package by name."""
+    """Uninstall a package by name."""
     os_lower = os_name.lower()
     if os_lower == "windows":
         subprocess.run(["winget", "uninstall", "-e", "--id", name], check=False)
-    elif os_lower in {"debian", "ubuntu"}:
+    elif os_lower in {"debian", "ubuntu", "linux"}:
         subprocess.run(["sudo", "apt-get", "-y", "remove", name], check=False)
     elif os_lower in {"rhel", "fedora"}:
         subprocess.run(["sudo", "yum", "-y", "remove", name], check=False)
@@ -90,4 +88,3 @@ def _safe_reg_value(key, name: str) -> str:
         return winreg.QueryValueEx(key, name)[0]
     except Exception:
         return ""
-
