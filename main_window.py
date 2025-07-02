@@ -80,6 +80,8 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.chat)
         self.stack.addWidget(self.apps)
 
+        self._threads: list[QThread] = []
+
         layout = QHBoxLayout()
         layout.addWidget(self.nav)
         layout.addWidget(self.stack)
@@ -131,6 +133,8 @@ class MainWindow(QMainWindow):
         """Run a system command in a background thread."""
         thread = _CmdThread(cmd)
         thread.finished.connect(self._show_output)
+        thread.finished.connect(lambda: self._threads.remove(thread))
+        self._threads.append(thread)
         thread.start()
 
     def _show_output(self, text: str) -> None:

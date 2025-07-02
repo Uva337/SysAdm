@@ -50,12 +50,17 @@ class ChatPage(QWidget):
         super().__init__()
         layout = QHBoxLayout(self)
 
+        splitter = QSplitter()
+        layout.addWidget(splitter)
+
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
-        layout.addWidget(self.tree, 1)
+        splitter.addWidget(self.tree)
 
-        right = QVBoxLayout()
-        layout.addLayout(right, 3)
+        right_widget = QWidget()
+        right = QVBoxLayout(right_widget)
+        splitter.addWidget(right_widget)
+        splitter.setSizes([200, 600])
 
         self.history = QTextEdit()
         self.history.setReadOnly(True)
@@ -63,6 +68,7 @@ class ChatPage(QWidget):
 
         input_layout = QHBoxLayout()
         self.input = QLineEdit()
+        self.input.setPlaceholderText("Type your message...")
         self.send_btn = QPushButton("Send")
         input_layout.addWidget(self.input)
         input_layout.addWidget(self.send_btn)
@@ -92,7 +98,13 @@ class ChatPage(QWidget):
         try:
             reply = plugin.chat(text)
         except Exception as exc:  # pragma: no cover - network errors
-            QMessageBox.warning(self, "Chat error", str(exc))
+            msg = str(exc)
+            if "402" in msg or "Insufficient" in msg:
+                msg = (
+                    "Your DeepSeek account has insufficient balance. "
+                    "Please top up your credits."
+                )
+            QMessageBox.warning(self, "Chat error", msg)
             return
         self.history.append(f"AI: {reply}")
         self.history.verticalScrollBar().setValue(
