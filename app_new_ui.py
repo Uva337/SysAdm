@@ -161,7 +161,7 @@ INTENT_ICONS = {
     'network.get_ip_config': 'network-wired', 'network.ping': 'network-transmit-receive',
     'system.info': 'dialog-information', 'process.list': 'view-process-tree',
     'disk.usage': 'drive-harddisk', 'power.reboot': 'system-reboot',
-    'power.shutdown': 'system-shutdown',
+    'power.shutdown': 'system-shutdown', 'chat': 'dialog-information'
 }
 
 
@@ -392,6 +392,40 @@ class UserManagementDialog(QDialog):
                 QMessageBox.critical(self, "Ошибка", f"Не удалось удалить пользователя '{username}'.")
 
 
+class PluginManagementDialog(QDialog):
+    def __init__(self, plugin_manager: PluginManager, parent=None):
+        super().__init__(parent)
+        self.plugin_manager = plugin_manager
+        self.setWindowTitle("Менеджер плагинов")
+        self.setMinimumSize(400, 300)
+
+        layout = QVBoxLayout(self)
+        self.plugin_list = QListWidget()
+        layout.addWidget(self.plugin_list)
+
+        btn_layout = QHBoxLayout()
+        self.reload_btn = QPushButton("Перезагрузить")
+        close_btn = QPushButton("Закрыть")
+        btn_layout.addStretch(1)
+        btn_layout.addWidget(self.reload_btn)
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+
+        self.reload_btn.clicked.connect(self.reload_plugins)
+        close_btn.clicked.connect(self.accept)
+
+        self.populate_list()
+
+    def populate_list(self):
+        self.plugin_list.clear()
+        for plugin in self.plugin_manager.plugins:
+            self.plugin_list.addItem(plugin.__class__.__name__)
+
+    def reload_plugins(self):
+        self.plugin_manager.reload_plugins()
+        self.populate_list()
+
+
 class InfoLabel(QLabel):
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
@@ -419,6 +453,7 @@ class MainWindow(QMainWindow):
         self.logger = AuditLogger()
         self.macro_engine = MacroEngine(self.run_execution_for_macro)
         self.plugin_manager = PluginManager()
+        self.plugin_manager.load_plugins()
         self.favorites = self.load_favorites()
 
         self.current_intent = None
@@ -450,14 +485,17 @@ class MainWindow(QMainWindow):
         self.dashboard_page = self.create_dashboard_page()
         self.commands_page = self.create_commands_page()
         self.macros_page = self.create_macros_page()
+        self.chat_page = self.create_chat_page()
 
         self.main_stack.addWidget(self.dashboard_page)
         self.main_stack.addWidget(self.commands_page)
         self.main_stack.addWidget(self.macros_page)
+        self.main_stack.addWidget(self.chat_page)
 
         self.add_nav_item("Быстрый запуск", 'dashboard', nav_list)
         self.add_nav_item("Команды", 'commands', nav_list)
         self.add_nav_item("Макросы", 'macros', nav_list)
+        self.add_nav_item("Чат", 'chat', nav_list)
 
         nav_list.currentRowChanged.connect(self.main_stack.setCurrentIndex)
         nav_list.setCurrentRow(0)
@@ -470,7 +508,8 @@ class MainWindow(QMainWindow):
         file_menu.addAction(exit_action)
 
         tools_menu = menu_bar.addMenu("Инструменты")
-        plugins_action = QAction(QIcon.fromTheme("system-software-install"), "Менеджер плагинов (WIP)", self)
+        plugins_action = QAction(QIcon.fromTheme("system-software-install"), "Менеджер плагинов", self)
+        plugins_action.triggered.connect(self.open_plugin_manager)
         tools_menu.addAction(plugins_action)
 
         if self.user_role == Role.ADMIN:
@@ -483,6 +522,10 @@ class MainWindow(QMainWindow):
         about_action = QAction(QIcon.fromTheme("help-about"), "О программе", self)
         about_action.triggered.connect(self.show_about_dialog)
         help_menu.addAction(about_action)
+
+    def open_plugin_manager(self):
+        dialog = PluginManagementDialog(self.plugin_manager, self)
+        dialog.exec_()
 
     def open_user_management(self):
         dialog = UserManagementDialog(self.auth_manager, self.username, self)
@@ -515,6 +558,19 @@ class MainWindow(QMainWindow):
         info_layout.addRow(InfoLabel("Имя хоста:"), ValueLabel(platform.node()))
         info_layout.addRow(InfoLabel("Операционная система:"), ValueLabel(f"{platform.system()} {platform.release()}"))
         main_layout.addWidget(info_group)
+
+        if PSUTIL_AVAILABLE:
+            stats_group = QGroupBox("Загрузка системы")
+            stats_layout = QFormLayout(stats_group)
+            self.cpu_value = ValueLabel()
+            self.mem_value = ValueLabel()
+            stats_layout.addRow(InfoLabel("CPU:"), self.cpu_value)
+            stats_layout.addRow(InfoLabel("Память:"), self.mem_value)
+            main_layout.addWidget(stats_group)
+
+            self.stats_timer = QTimer(self)
+            self.stats_timer.timeout.connect(self.update_system_stats)
+            self.stats_timer.start(1000)
 
         # Панель быстрого запуска
         self.quick_launch_group = QGroupBox("Панель быстрого запуска (Избранное)")
@@ -666,6 +722,21 @@ class MainWindow(QMainWindow):
         save_btn.clicked.connect(self.save_macro)
         load_btn.clicked.connect(self.load_macro)
         play_btn.clicked.connect(lambda: self.macro_engine.play_macro(self.macro_engine.recorded_macro))
+        return page
+
+    def create_chat_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        self.chat_history = QTextEdit()
+        self.chat_history.setReadOnly(True)
+        input_layout = QHBoxLayout()
+        self.chat_input = QLineEdit()
+        send_btn = QPushButton("Отправить")
+        send_btn.clicked.connect(self.handle_chat_send)
+        input_layout.addWidget(self.chat_input, 1)
+        input_layout.addWidget(send_btn)
+        layout.addWidget(self.chat_history, 1)
+        layout.addLayout(input_layout)
         return page
 
     def populate_function_tree(self):
@@ -1067,6 +1138,23 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка загрузки", f"Не удалось загрузить макрос: {e}")
 
+    def handle_chat_send(self):
+        text = self.chat_input.text().strip()
+        if not text:
+            return
+        self.chat_history.append(f"Вы: {text}")
+        # Простейший ответ-заглушка
+        self.chat_history.append(f"Bot: Я получил '{text}'")
+        self.chat_input.clear()
+
+    def update_system_stats(self):
+        if not PSUTIL_AVAILABLE:
+            return
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory()
+        self.cpu_value.setText(f"{cpu}%")
+        self.mem_value.setText(f"{mem.percent}%")
+
     def load_favorites(self):
         if os.path.exists(FAVORITES_FILE):
             try:
@@ -1088,6 +1176,9 @@ class MainWindow(QMainWindow):
         if self.exec_thread and self.exec_thread.isRunning():
             self.exec_thread.quit()
             self.exec_thread.wait()
+
+        if hasattr(self, 'stats_timer'):
+            self.stats_timer.stop()
 
         # if self.log_viewer_timer:
         #     self.log_viewer_timer.stop()
