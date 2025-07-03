@@ -1,0 +1,18 @@
+syntax = "proto3";
+package adminmaster;
+option go_package = "server/proto;proto";
+
+service AdminMaster {
+  rpc Ping(Empty) returns (Pong);
+  rpc ListServers(Empty) returns (ServerList);
+}
+
+message Empty {}
+
+message Pong {
+  string message = 1;
+}
+
+message ServerList {
+  repeated string names = 1;
+}
